@@ -5,7 +5,7 @@ Contains the class DBStorage
 
 import models
 from models.amenity import Amenity
-from models.base_model import BaseModel, Base
+from models.base_model import Base
 from models.city import City
 from models.place import Place
 from models.review import Review
@@ -13,6 +13,8 @@ from models.state import State
 from models.user import User
 from os import getenv
 import sqlalchemy
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
@@ -21,7 +23,7 @@ classes = {"Amenity": Amenity, "City": City,
 
 
 class DBStorage:
-    """interaacts with the MySQL database"""
+    """interacts with the MySQL database"""
     __engine = None
     __session = None
 
@@ -32,13 +34,19 @@ class DBStorage:
         HBNB_MYSQL_HOST = getenv('HBNB_MYSQL_HOST')
         HBNB_MYSQL_DB = getenv('HBNB_MYSQL_DB')
         HBNB_ENV = getenv('HBNB_ENV')
-        self.__engine = create_engine('mysql+mysqldb://{}:{}@{}/{}'.
-                                      format(HBNB_MYSQL_USER,
-                                             HBNB_MYSQL_PWD,
-                                             HBNB_MYSQL_HOST,
-                                             HBNB_MYSQL_DB))
+        try:
+            self.__engine = create_engine('mysql+mysqldb://{}:{}@{}/{}'.format(HBNB_MYSQL_USER, HBNB_MYSQL_PWD, HBNB_MYSQL_HOST, HBNB_MYSQL_DB))
+        except Exception as e:
+            print("Error creating SQLAlchemy engine:", e)
+
         if HBNB_ENV == "test":
             Base.metadata.drop_all(self.__engine)
+        Base.metadata.create_all(self.__engine)  # Move this line here
+        sess_factory = sessionmaker(bind=self.__engine, expire_on_commit=False)
+        Session = scoped_session(sess_factory)
+        self.__session = Session
+        # Move the reload method call here
+        self.reload()
 
     def all(self, cls=None):
         """query on the current database session"""
@@ -66,7 +74,7 @@ class DBStorage:
 
     def reload(self):
         """reloads data from the database"""
-        Base.metadata.create_all(self.__engine)
+        self.__session.remove()
         sess_factory = sessionmaker(bind=self.__engine, expire_on_commit=False)
         Session = scoped_session(sess_factory)
         self.__session = Session
